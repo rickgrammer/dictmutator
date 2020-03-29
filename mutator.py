@@ -22,22 +22,39 @@
 '''
 import typing
 
+supported_entry_types = dict, list, tuple, set
+
+
+def enhanced_enumertor(enumerable):
+    if isinstance(enumerable, dict):
+        return enumerable.items()
+    return enumerate(enumerable)
+
 
 def _mutate(specimen, mutating_function):
-    for key in specimen:
+    # for key in specimen:
+    for key, inner_specimen in enhanced_enumertor(specimen):
         # Call recursively if the specimen is a dict
-        if isinstance(specimen[key], dict):
-            _mutate(specimen[key], mutating_function)
+        if isinstance(inner_specimen, dict):
+            _mutate(inner_specimen, mutating_function)
+
         # Recurse iteratively if its an iterable, ignore str type
-        elif isinstance(specimen[key], typing.Iterable) and not isinstance(
-                specimen[key], str):
-            for index, entry in enumerate(specimen[key]):
-                if isinstance(entry, dict):
-                    _mutate(entry, mutating_function)
-                else:
-                    specimen[key][index] = mutating_function(entry)
+        elif isinstance(inner_specimen, typing.Iterable) and not isinstance(
+                inner_specimen, str):
+            _mutate(inner_specimen, mutating_function)
+
+        # Mutate the specimen
         else:
-            specimen[key] = mutating_function(specimen[key])
+            if not isinstance(specimen, typing.Hashable):
+                # check for set
+                if isinstance(specimen, set):
+                    specimen.remove(inner_specimen)
+                    specimen.add(mutating_function(inner_specimen))
+                else:
+                    specimen[key] = mutating_function(inner_specimen)
+            else:
+                # TODO: Add warnings
+                print('skipping immutables')
 
 
 def mutate(specimen, mutating_function):
@@ -58,8 +75,10 @@ def mutate(specimen, mutating_function):
     mutated value.
 
     '''
-    if not isinstance(specimen, dict):
-        raise TypeError('specimen must be of type dict.')
+    if not isinstance(specimen, supported_entry_types):
+        raise TypeError(
+            'Invalid specimen type: %s, specimen must be any of the (%s, %s, \
+             %s, %s)' % (type(specimen), *supported_entry_types))
     _mutate(specimen, mutating_function)
 
 
@@ -68,21 +87,34 @@ if __name__ == '__main__':
     def hi_to_hello(greet):
         return 'hello' if greet == 'hi' else greet
 
+    # TODO: Add testing env, pytest
     d = {
-        'greet':
-        'hi',
-        'list_of_greetings': [
-            'hello',
-            'good morning',
-            'hi',
-        ],
-        'container_of_greetings': [('hi', {
-                'greet':
+            'greet': 'hi',
+            'list_of_greetings': [
+                'hello',
+                'good morning',
                 'hi',
-                'tuple_of_greetings': ('hi', 'good evening')
-            }, ('greet', 'hi')
-        ), {'hi', 'hello', 'namaste', }, ({'greet': 'hi'},)
-        ]
-    }
-    mutate(d, hi_to_hello)
+            ],
+            'container_of_greetings': [
+                (
+                    'hi',
+                     {
+                        'greet':
+                        'hi',
+                        'tuple_of_greetings': ('hi', 'good evening')
+                     },
+                     (
+                           'greet',
+                           'hi'
+                     )
+                ),
+                (
+                    {
+                        'greet': 'hi'
+                    },
+                )
+            ]
+    } # yapf: disable
+    # mutate(d, hi_to_hello)
+    mutate(object(), hi_to_hello)
     print(d)
